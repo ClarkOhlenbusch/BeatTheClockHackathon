@@ -5,13 +5,14 @@ Run: DYLD_LIBRARY_PATH="$(brew --prefix expat)/lib" venv/bin/python3.12 test_age
 import asyncio
 import os
 import sys
+from contextlib import AsyncExitStack
 
 from google import genai
 from google.genai import types
 from playwright.async_api import async_playwright
 
 sys.path.insert(0, os.path.dirname(__file__))
-from agent import URLS, API_KEY, MODEL, build_live_config, handle_tool_call
+from agent import URLS, API_KEY, build_live_config, apply_noise_gate, connect_live_session, handle_tool_call
 
 PASSED = 0
 FAILED = 0
@@ -86,6 +87,27 @@ async def test_handle_tool_call():
         await browser.close()
 
 
+def test_voice_session_config():
+    print("\n🧪 Voice session config")
+    config = build_live_config()
+    vad = config.realtime_input_config.automatic_activity_detection
+
+    report("barge-in disabled for noise", config.realtime_input_config.activity_handling == types.ActivityHandling.NO_INTERRUPTION)
+    report("start sensitivity is low", vad.start_of_speech_sensitivity == types.StartSensitivity.START_SENSITIVITY_LOW)
+    report("end sensitivity is low", vad.end_of_speech_sensitivity == types.EndSensitivity.END_SENSITIVITY_LOW)
+    report("prefix padding configured", vad.prefix_padding_ms >= 500)
+    report("silence duration configured", vad.silence_duration_ms >= 900)
+
+
+def test_noise_gate():
+    print("\n🧪 Noise gate")
+    quiet = (1).to_bytes(2, byteorder=sys.byteorder, signed=True) * 64
+    speech = (2000).to_bytes(2, byteorder=sys.byteorder, signed=True) * 64
+
+    report("quiet audio passes by default", apply_noise_gate(quiet) == quiet)
+    report("speech audio passes through", apply_noise_gate(speech) == speech)
+
+
 async def test_live_session():
     print("\n🧪 Live API connects")
     if not API_KEY:
@@ -94,7 +116,8 @@ async def test_live_session():
 
     client = genai.Client(api_key=API_KEY)
     try:
-        async with client.aio.live.connect(model=MODEL, config=build_live_config()) as session:
+        async with AsyncExitStack() as stack:
+            await connect_live_session(client, stack)
             report("Session connected", True)
     except Exception as e:
         report("Session connected", False, str(e))
@@ -108,7 +131,8 @@ async def test_multi_turn_with_tools():
 
     client = genai.Client(api_key=API_KEY)
 
-    async with client.aio.live.connect(model=MODEL, config=build_live_config()) as session:
+    async with AsyncExitStack() as stack:
+        session = await connect_live_session(client, stack)
         # Turn 1: ask for table
         await session.send_client_content(
             turns=[types.Content(role="user", parts=[types.Part.from_text(text="I want a big wooden table for 8 people")])]
@@ -172,6 +196,8 @@ async def run_all():
     await test_pages_load()
     await test_add_to_cart_buttons()
     await test_handle_tool_call()
+    test_voice_session_config()
+    test_noise_gate()
     await test_live_session()
     await test_multi_turn_with_tools()
 
