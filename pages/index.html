@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Wayfair - Furniture & Decor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; }
+        .header { background: #7B2D8B; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; }
+        .logo { color: white; font-size: 28px; font-weight: bold; letter-spacing: -1px; }
+        .search-bar { flex: 1; max-width: 600px; margin: 0 40px; }
+        .search-bar input { width: 100%; padding: 12px 16px; border-radius: 4px; border: none; font-size: 16px; }
+        .nav-links { color: white; display: flex; gap: 20px; font-size: 14px; }
+        .hero { background: linear-gradient(135deg, #f5e6d3, #e8d5c4); padding: 60px 40px; text-align: center; }
+        .hero h1 { font-size: 42px; color: #333; margin-bottom: 12px; }
+        .hero p { font-size: 18px; color: #666; }
+        .categories { padding: 40px; }
+        .categories h2 { font-size: 24px; margin-bottom: 24px; color: #333; }
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .card { border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
+        .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .card-img { width: 100%; height: 200px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; font-size: 48px; }
+        .card-body { padding: 16px; }
+        .card-body h3 { font-size: 14px; color: #333; margin-bottom: 8px; }
+        .card-body .price { color: #c00; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">Wayfair</div>
+        <div class="search-bar"><input type="text" placeholder="Find anything home..."></div>
+        <div class="nav-links"><span>Sign In</span><span>🛒 Cart</span></div>
+    </div>
+    <div class="hero">
+        <h1>Big Furniture Sale</h1>
+        <p>Up to 70% off dining tables, chairs, and more</p>
+    </div>
+    <div class="categories">
+        <h2>Shop by Category</h2>
+        <div class="grid">
+            <div class="card"><div class="card-img">🪑</div><div class="card-body"><h3>Dining Chairs</h3><p class="price">From $89</p></div></div>
+            <div class="card"><div class="card-img">🍽️</div><div class="card-body"><h3>Dining Tables</h3><p class="price">From $199</p></div></div>
+            <div class="card"><div class="card-img">🛋️</div><div class="card-body"><h3>Sofas</h3><p class="price">From $299</p></div></div>
+            <div class="card"><div class="card-img">🛏️</div><div class="card-body"><h3>Beds & Headboards</h3><p class="price">From $149</p></div></div>
+        </div>
+    </div>
+</body>
+</html>
