@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Order Confirmed - Wayfair</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #2b2b2b; }
+        .header { background: #7B2D8B; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; }
+        .logo { color: white; font-size: 28px; font-weight: bold; letter-spacing: -1px; }
+        .nav-links { color: white; display: flex; gap: 20px; font-size: 14px; }
+        .wrap { padding: 42px 40px; max-width: 980px; margin: 0 auto; }
+        .success { border: 1px solid #d8ead8; background: #f3fbf3; border-radius: 8px; padding: 28px; margin-bottom: 28px; }
+        .success h1 { font-size: 30px; margin-bottom: 10px; color: #215f2b; }
+        .success p { color: #3e5942; font-size: 17px; }
+        .details { display: grid; grid-template-columns: 1fr 320px; gap: 32px; }
+        h2 { font-size: 20px; margin-bottom: 14px; }
+        .item { display: grid; grid-template-columns: 80px 1fr auto; gap: 14px; padding: 16px 0; border-top: 1px solid #e7e2ea; }
+        .thumb { height: 70px; background: #f7f4f8; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+        .item h3 { font-size: 16px; margin-bottom: 6px; }
+        .meta { color: #625966; font-size: 14px; }
+        .summary { border: 1px solid #e1dce5; border-radius: 8px; padding: 22px; height: fit-content; }
+        .row { display: flex; justify-content: space-between; padding: 8px 0; color: #49424c; }
+        .total { display: flex; justify-content: space-between; border-top: 1px solid #e1dce5; margin-top: 12px; padding-top: 16px; font-size: 22px; font-weight: 800; }
+        @media (max-width: 820px) { .details { grid-template-columns: 1fr; } .wrap { padding: 24px; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">Wayfair</div>
+        <div class="nav-links"><span>Order Complete</span></div>
+    </div>
+    <main class="wrap">
+        <section class="success">
+            <h1>Order Confirmed</h1>
+            <p id="confirmation">Your mock order has been placed.</p>
+        </section>
+        <section class="details">
+            <div>
+                <h2>Items</h2>
+                <div id="items"></div>
+            </div>
+            <aside class="summary">
+                <h2>Receipt</h2>
+                <div class="row"><span>Subtotal</span><span id="subtotal">$0.00</span></div>
+                <div class="row"><span>Shipping</span><span>Free</span></div>
+                <div class="row"><span>Tax</span><span id="tax">$0.00</span></div>
+                <div class="total"><span>Total</span><span id="total">$0.00</span></div>
+            </aside>
+        </section>
+    </main>
+    <script>
+        const ORDER_KEY = 'wayfair_voice_last_order';
+        const money = value => `$${value.toFixed(2)}`;
+        const order = JSON.parse(localStorage.getItem(ORDER_KEY) || '{"orderNumber":"WF-MOCK-1047","items":[],"subtotal":0,"tax":0,"total":0}');
+        document.getElementById('confirmation').textContent = `Confirmation ${order.orderNumber}. A mock receipt has been sent to alex.shopper@example.com.`;
+        document.getElementById('items').innerHTML = order.items.map(item => `
+            <article class="item">
+                <div class="thumb">${item.image}</div>
+                <div>
+                    <h3>${item.name}</h3>
+                    <div class="meta">${item.quantity} ${item.unit}${item.quantity === 1 ? '' : 's'} · ${money(item.price)} each</div>
+                </div>
+                <strong>${money(item.price * item.quantity)}</strong>
+            </article>
+        `).join('');
+        document.getElementById('subtotal').textContent = money(order.subtotal || 0);
+        document.getElementById('tax').textContent = money(order.tax || 0);
+        document.getElementById('total').textContent = money(order.total || 0);
+    </script>
+</body>
+</html>

@@ -26,6 +26,47 @@ URLS = {
     "square_table": f"file://{PAGE_DIR}/square-table.html",
     "chairs": f"file://{PAGE_DIR}/chairs.html",
     "placemats": f"file://{PAGE_DIR}/placemats.html",
+    "cart": f"file://{PAGE_DIR}/cart.html",
+    "checkout": f"file://{PAGE_DIR}/checkout.html",
+    "confirmation": f"file://{PAGE_DIR}/confirmation.html",
+}
+
+PRODUCTS = {
+    "large_table": {
+        "page": "large_table",
+        "name": "Hawthorne 72\" Solid Wood Rectangular Dining Table",
+        "price": 649.99,
+        "unit": "table",
+        "image": "🪵",
+    },
+    "round_table": {
+        "page": "round_table",
+        "name": "Kuuipo 47\" Round Dining Table",
+        "price": 284.99,
+        "unit": "table",
+        "image": "🟤",
+    },
+    "square_table": {
+        "page": "square_table",
+        "name": "Rahn 48\" Square Dining Table",
+        "price": 349.99,
+        "unit": "table",
+        "image": "⬛",
+    },
+    "chairs": {
+        "page": "chairs",
+        "name": "Parsons Upholstered Dining Chair (Set of 2)",
+        "price": 189.99,
+        "unit": "set",
+        "image": "🪑🪑",
+    },
+    "placemats": {
+        "page": "placemats",
+        "name": "Handwoven Cotton Placemats (Set of 6)",
+        "price": 34.99,
+        "unit": "set",
+        "image": "🧶",
+    },
 }
 
 SYSTEM_PROMPT = """You are a friendly, enthusiastic voice shopping assistant on Wayfair. You're helping someone furnish their home.
@@ -36,7 +77,8 @@ CONVERSATION FLOW:
 1. When the user mentions a room or need, get excited and ask clarifying questions (how many people, style preferences, budget, etc.)
 2. Based on their answers, show them a product using the navigate tool and describe what you're showing them.
 3. Ask what they think. If they like it, add it to cart and then suggest complementary items (e.g., after a table, suggest chairs; after chairs, suggest placemats).
-4. Keep the conversation going naturally — you're a personal shopping assistant.
+4. When the user is ready to wrap up or go to checkout, show the cart first. After they confirm, open checkout. After they confirm checkout, place the mock order.
+5. Keep the conversation going naturally — you're a personal shopping assistant.
 
 PRODUCT CATALOG:
 - large_table: Hawthorne 72" Solid Wood Rectangular Table, seats 6-8, natural acacia wood, $649.99. Great for families or entertaining.
@@ -51,12 +93,16 @@ RULES:
 - Do not restart the conversation or repeat the same greeting after every turn.
 - Treat short pauses, background noise, and partial words as non-answers unless the user's intent is clear.
 - Always use navigate to show a product BEFORE describing it.
-- After adding to cart, suggest a related item.
+- When adding a product, call add_to_cart with the exact quantity the user requested. "One set" means quantity 1; "two sets" means quantity 2.
+- After adding to cart, briefly say what was added and suggest a related item.
+- If the user asks to see the cart, wrap up, or go to checkout, call view_cart before checkout.
+- If the user confirms the cart looks right, call start_checkout.
+- If the user says to check out or place the order from checkout, call place_order.
 - If they want a wooden table for 6-8 people, show large_table.
 - If they want something smaller or for 4, show round_table or square_table.
 - Match chairs and placemats to complement whatever table they chose."""
 
-PAGE_NAMES = ["home", "large_table", "round_table", "square_table", "chairs", "placemats"]
+PAGE_NAMES = ["home", "large_table", "round_table", "square_table", "chairs", "placemats", "cart", "checkout"]
 
 navigate_decl = types.FunctionDeclaration(
     name="navigate",
@@ -72,11 +118,43 @@ navigate_decl = types.FunctionDeclaration(
 
 add_to_cart_decl = types.FunctionDeclaration(
     name="add_to_cart",
-    description="Add the current product to cart",
+    description="Add the current product to cart with the requested quantity",
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "quantity": types.Schema(
+                type="INTEGER",
+                description="Number of units or sets to add. Defaults to 1.",
+            ),
+        },
+    ),
+)
+
+view_cart_decl = types.FunctionDeclaration(
+    name="view_cart",
+    description="Show the user's cart before checkout",
     parameters=types.Schema(type="OBJECT", properties={}),
 )
 
-tools = [types.Tool(function_declarations=[navigate_decl, add_to_cart_decl])]
+start_checkout_decl = types.FunctionDeclaration(
+    name="start_checkout",
+    description="Open checkout and fill mock customer, shipping, and payment information",
+    parameters=types.Schema(type="OBJECT", properties={}),
+)
+
+place_order_decl = types.FunctionDeclaration(
+    name="place_order",
+    description="Place the mock order and show the confirmation screen",
+    parameters=types.Schema(type="OBJECT", properties={}),
+)
+
+tools = [types.Tool(function_declarations=[
+    navigate_decl,
+    add_to_cart_decl,
+    view_cart_decl,
+    start_checkout_decl,
+    place_order_decl,
+])]
 
 API_KEY = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 MODEL = "gemini-3.1-flash-live-preview"
@@ -137,6 +215,58 @@ def apply_noise_gate(chunk):
     return chunk
 
 
+def current_product_page(url):
+    for product_page, product_url in URLS.items():
+        if product_page in PRODUCTS and url == product_url:
+            return product_page
+    return None
+
+
+async def read_cart(page):
+    return await page.evaluate("""() => {
+        try {
+            return JSON.parse(localStorage.getItem('wayfair_voice_cart') || '[]');
+        } catch (error) {
+            return [];
+        }
+    }""")
+
+
+async def write_cart(page, cart):
+    await page.evaluate(
+        """cart => localStorage.setItem('wayfair_voice_cart', JSON.stringify(cart))""",
+        cart,
+    )
+
+
+async def add_product_to_cart(page, product_page, quantity):
+    product = PRODUCTS[product_page].copy()
+    product["quantity"] = quantity
+    cart = await read_cart(page)
+    for item in cart:
+        if item["page"] == product_page:
+            item["quantity"] += quantity
+            await write_cart(page, cart)
+            return item
+    cart.append(product)
+    await write_cart(page, cart)
+    return product
+
+
+def cart_total(cart):
+    return sum(item["price"] * item["quantity"] for item in cart)
+
+
+def cart_summary(cart):
+    if not cart:
+        return "Your cart is empty."
+    items = [
+        f"{item['quantity']} {item['unit']}{'' if item['quantity'] == 1 else 's'} of {item['name']}"
+        for item in cart
+    ]
+    return f"Cart has {', '.join(items)}. Total is ${cart_total(cart):.2f}."
+
+
 async def handle_tool_call(fc, page):
     """Execute a tool call and return the result string."""
     args = dict(fc.args) if fc.args else {}
@@ -146,13 +276,49 @@ async def handle_tool_call(fc, page):
         await page.goto(url, wait_until="domcontentloaded")
         return f"Navigated to {args['page']}"
     elif fc.name == "add_to_cart":
-        print("🛒 Adding to cart...")
-        try:
-            btn = page.locator("button:has-text('Add to Cart')").first
-            await btn.click(timeout=2000)
-        except Exception:
-            pass
-        return "Added to cart successfully"
+        quantity = max(1, int(args.get("quantity", 1)))
+        product_page = current_product_page(page.url)
+        if not product_page:
+            return "No product is currently selected. Show a product before adding it to cart."
+        item = await add_product_to_cart(page, product_page, quantity)
+        print(f"🛒 Added {quantity} {item['unit']}(s): {item['name']}")
+        return f"Added {quantity} {item['unit']}{'' if quantity == 1 else 's'} of {item['name']} to cart."
+    elif fc.name == "view_cart":
+        cart = await read_cart(page)
+        print("🛒 Showing cart...")
+        await page.goto(URLS["cart"], wait_until="domcontentloaded")
+        return cart_summary(cart)
+    elif fc.name == "start_checkout":
+        cart = await read_cart(page)
+        if not cart:
+            await page.goto(URLS["cart"], wait_until="domcontentloaded")
+            return "The cart is empty. Add a product before checkout."
+        print("💳 Opening checkout...")
+        await page.goto(URLS["checkout"], wait_until="domcontentloaded")
+        return "Checkout is ready with mock shopper information filled in."
+    elif fc.name == "place_order":
+        cart = await read_cart(page)
+        if not cart:
+            await page.goto(URLS["cart"], wait_until="domcontentloaded")
+            return "The cart is empty. Add a product before placing an order."
+        order = {
+            "orderNumber": "WF-MOCK-1047",
+            "items": cart,
+            "subtotal": cart_total(cart),
+            "shipping": 0,
+            "tax": round(cart_total(cart) * 0.0825, 2),
+        }
+        order["total"] = round(order["subtotal"] + order["shipping"] + order["tax"], 2)
+        await page.evaluate(
+            """order => {
+                localStorage.setItem('wayfair_voice_last_order', JSON.stringify(order));
+                localStorage.removeItem('wayfair_voice_cart');
+            }""",
+            order,
+        )
+        print(f"✅ Placed mock order {order['orderNumber']}")
+        await page.goto(URLS["confirmation"], wait_until="domcontentloaded")
+        return f"Mock order placed. Confirmation number {order['orderNumber']}. Total ${order['total']:.2f}."
     return "Unknown tool"
 
 

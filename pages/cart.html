@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cart - Wayfair</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #2b2b2b; }
+        .header { background: #7B2D8B; padding: 16px 40px; display: flex; align-items: center; justify-content: space-between; }
+        .logo { color: white; font-size: 28px; font-weight: bold; letter-spacing: -1px; }
+        .search-bar { flex: 1; max-width: 600px; margin: 0 40px; }
+        .search-bar input { width: 100%; padding: 12px 16px; border-radius: 4px; border: none; font-size: 16px; }
+        .nav-links { color: white; display: flex; gap: 20px; font-size: 14px; }
+        .wrap { padding: 34px 40px; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 32px; align-items: start; }
+        h1 { font-size: 28px; margin-bottom: 20px; }
+        .item { display: grid; grid-template-columns: 110px 1fr auto; gap: 18px; padding: 20px 0; border-top: 1px solid #e7e2ea; }
+        .item:last-child { border-bottom: 1px solid #e7e2ea; }
+        .thumb { height: 96px; background: #f7f4f8; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 42px; }
+        .item h2 { font-size: 18px; margin-bottom: 8px; font-weight: 650; }
+        .meta { color: #625966; font-size: 14px; line-height: 1.5; }
+        .line-price { text-align: right; font-weight: 700; font-size: 18px; min-width: 110px; }
+        .summary { border: 1px solid #e1dce5; border-radius: 8px; padding: 22px; position: sticky; top: 24px; }
+        .summary h2 { font-size: 20px; margin-bottom: 18px; }
+        .row { display: flex; justify-content: space-between; padding: 8px 0; color: #49424c; }
+        .total { display: flex; justify-content: space-between; border-top: 1px solid #e1dce5; margin-top: 12px; padding-top: 16px; font-size: 22px; font-weight: 800; }
+        .checkout { width: 100%; margin-top: 18px; background: #7B2D8B; color: white; border: 0; border-radius: 4px; padding: 15px 18px; font-size: 17px; font-weight: 700; cursor: pointer; }
+        .empty { padding: 42px; background: #f8f6f9; border-radius: 8px; color: #5d5362; }
+        @media (max-width: 820px) { .wrap { grid-template-columns: 1fr; padding: 24px; } .item { grid-template-columns: 88px 1fr; } .line-price { grid-column: 2; text-align: left; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">Wayfair</div>
+        <div class="search-bar"><input type="text" placeholder="Find anything home..."></div>
+        <div class="nav-links"><span>Sign In</span><span>Cart</span></div>
+    </div>
+    <main class="wrap">
+        <section>
+            <h1>Your Cart</h1>
+            <div id="items"></div>
+        </section>
+        <aside class="summary">
+            <h2>Order Summary</h2>
+            <div class="row"><span>Subtotal</span><span id="subtotal">$0.00</span></div>
+            <div class="row"><span>Shipping</span><span>Free</span></div>
+            <div class="row"><span>Estimated Tax</span><span id="tax">$0.00</span></div>
+            <div class="total"><span>Total</span><span id="total">$0.00</span></div>
+            <button class="checkout" onclick="location.href='checkout.html'">Checkout</button>
+        </aside>
+    </main>
+    <script>
+        const CART_KEY = 'wayfair_voice_cart';
+        const money = value => `$${value.toFixed(2)}`;
+        const cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+        const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const tax = Math.round(subtotal * 0.0825 * 100) / 100;
+        const items = document.getElementById('items');
+
+        if (!cart.length) {
+            items.innerHTML = '<div class="empty">Your cart is empty.</div>';
+            document.querySelector('.checkout').disabled = true;
+            document.querySelector('.checkout').style.opacity = '0.5';
+        } else {
+            items.innerHTML = cart.map(item => `
+                <article class="item">
+                    <div class="thumb">${item.image}</div>
+                    <div>
+                        <h2>${item.name}</h2>
+                        <div class="meta">Quantity: ${item.quantity} ${item.unit}${item.quantity === 1 ? '' : 's'}</div>
+                        <div class="meta">Unit price: ${money(item.price)}</div>
+                    </div>
+                    <div class="line-price">${money(item.price * item.quantity)}</div>
+                </article>
+            `).join('');
+        }
+
+        document.getElementById('subtotal').textContent = money(subtotal);
+        document.getElementById('tax').textContent = money(tax);
+        document.getElementById('total').textContent = money(subtotal + tax);
+    </script>
+</body>
+</html>

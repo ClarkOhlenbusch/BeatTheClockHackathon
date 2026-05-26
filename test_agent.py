@@ -12,7 +12,7 @@ from google.genai import types
 from playwright.async_api import async_playwright
 
 sys.path.insert(0, os.path.dirname(__file__))
-from agent import URLS, API_KEY, build_live_config, apply_noise_gate, connect_live_session, handle_tool_call
+from agent import URLS, PRODUCTS, API_KEY, build_live_config, apply_noise_gate, connect_live_session, handle_tool_call
 
 PASSED = 0
 FAILED = 0
@@ -53,7 +53,7 @@ async def test_add_to_cart_buttons():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         for name, url in URLS.items():
-            if name == "home":
+            if name not in PRODUCTS:
                 continue
             await page.goto(url)
             count = await page.locator("button:has-text('Add to Cart')").count()
@@ -84,6 +84,54 @@ async def test_handle_tool_call():
 
         result = await handle_tool_call(FC2(), page)
         report("add_to_cart returns result", "Added" in result)
+        await browser.close()
+
+
+async def test_cart_checkout_tools():
+    print("\n🧪 cart and checkout tools work")
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(URLS["chairs"])
+
+        class AddTwo:
+            name = "add_to_cart"
+            args = {"quantity": 2}
+            id = "t3"
+
+        result = await handle_tool_call(AddTwo(), page)
+        report("adds requested quantity", "2 sets" in result)
+        cart = await page.evaluate("() => JSON.parse(localStorage.getItem('wayfair_voice_cart'))")
+        report("cart stores quantity", cart[0]["quantity"] == 2)
+
+        class ViewCart:
+            name = "view_cart"
+            args = {}
+            id = "t4"
+
+        result = await handle_tool_call(ViewCart(), page)
+        report("view_cart summarizes cart", "Total is $379.98" in result)
+        report("cart page visible", "cart.html" in page.url)
+
+        class StartCheckout:
+            name = "start_checkout"
+            args = {}
+            id = "t5"
+
+        result = await handle_tool_call(StartCheckout(), page)
+        report("checkout starts", "Checkout is ready" in result)
+        report("checkout page visible", "checkout.html" in page.url)
+
+        class PlaceOrder:
+            name = "place_order"
+            args = {}
+            id = "t6"
+
+        result = await handle_tool_call(PlaceOrder(), page)
+        report("order places", "WF-MOCK-1047" in result)
+        report("confirmation page visible", "confirmation.html" in page.url)
+        cart_after_order = await page.evaluate("() => localStorage.getItem('wayfair_voice_cart')")
+        report("cart clears after order", cart_after_order is None)
         await browser.close()
 
 
@@ -196,6 +244,7 @@ async def run_all():
     await test_pages_load()
     await test_add_to_cart_buttons()
     await test_handle_tool_call()
+    await test_cart_checkout_tools()
     test_voice_session_config()
     test_noise_gate()
     await test_live_session()
