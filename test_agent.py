@@ -12,7 +12,8 @@ from google.genai import types
 from playwright.async_api import async_playwright
 
 sys.path.insert(0, os.path.dirname(__file__))
-from agent import URLS, PRODUCTS, API_KEY, build_live_config, apply_noise_gate, connect_live_session, handle_tool_call
+import agent
+from agent import URLS, PRODUCTS, API_KEY, build_live_config, apply_noise_gate, connect_live_session, handle_tool_call, run_tool_call
 
 PASSED = 0
 FAILED = 0
@@ -135,6 +136,27 @@ async def test_cart_checkout_tools():
         await browser.close()
 
 
+async def test_tool_call_timeout():
+    print("\n🧪 tool calls cannot hang the conversation")
+    old_timeout = agent.TOOL_TIMEOUT_SECONDS
+    agent.TOOL_TIMEOUT_SECONDS = 0.01
+
+    class SlowPage:
+        async def goto(self, *args, **kwargs):
+            await asyncio.sleep(1)
+
+    class Navigate:
+        name = "navigate"
+        args = {"page": "square_table"}
+        id = "t7"
+
+    try:
+        result = await run_tool_call(Navigate(), SlowPage())
+        report("slow navigation returns failure", "navigate failed" in result)
+    finally:
+        agent.TOOL_TIMEOUT_SECONDS = old_timeout
+
+
 def test_voice_session_config():
     print("\n🧪 Voice session config")
     config = build_live_config()
@@ -245,6 +267,7 @@ async def run_all():
     await test_add_to_cart_buttons()
     await test_handle_tool_call()
     await test_cart_checkout_tools()
+    await test_tool_call_timeout()
     test_voice_session_config()
     test_noise_gate()
     await test_live_session()

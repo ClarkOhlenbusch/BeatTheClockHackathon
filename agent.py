@@ -14,6 +14,8 @@ PLAYBACK_RATE = 24000
 INPUT_BLOCKSIZE = 1024
 NOISE_GATE_RMS = int(os.environ.get("VOICE_NOISE_GATE_RMS", "0"))
 ASSISTANT_AUDIO_GUARD_SECONDS = 0.5
+NAVIGATION_TIMEOUT_MS = 5000
+TOOL_TIMEOUT_SECONDS = 8
 STARTUP_MESSAGE = (
     "Greet the shopper in one short sentence and ask what furniture they are shopping for today."
 )
@@ -273,7 +275,8 @@ async def handle_tool_call(fc, page):
     if fc.name == "navigate":
         url = URLS[args["page"]]
         print(f"🌐 Navigating to: {args['page']}")
-        await page.goto(url, wait_until="domcontentloaded")
+        await page.goto(url, wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
+        print(f"✅ Navigated to: {args['page']}")
         return f"Navigated to {args['page']}"
     elif fc.name == "add_to_cart":
         quantity = max(1, int(args.get("quantity", 1)))
@@ -286,20 +289,20 @@ async def handle_tool_call(fc, page):
     elif fc.name == "view_cart":
         cart = await read_cart(page)
         print("🛒 Showing cart...")
-        await page.goto(URLS["cart"], wait_until="domcontentloaded")
+        await page.goto(URLS["cart"], wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
         return cart_summary(cart)
     elif fc.name == "start_checkout":
         cart = await read_cart(page)
         if not cart:
-            await page.goto(URLS["cart"], wait_until="domcontentloaded")
+            await page.goto(URLS["cart"], wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
             return "The cart is empty. Add a product before checkout."
         print("💳 Opening checkout...")
-        await page.goto(URLS["checkout"], wait_until="domcontentloaded")
+        await page.goto(URLS["checkout"], wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
         return "Checkout is ready with mock shopper information filled in."
     elif fc.name == "place_order":
         cart = await read_cart(page)
         if not cart:
-            await page.goto(URLS["cart"], wait_until="domcontentloaded")
+            await page.goto(URLS["cart"], wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
             return "The cart is empty. Add a product before placing an order."
         order = {
             "orderNumber": "WF-MOCK-1047",
@@ -317,9 +320,18 @@ async def handle_tool_call(fc, page):
             order,
         )
         print(f"✅ Placed mock order {order['orderNumber']}")
-        await page.goto(URLS["confirmation"], wait_until="domcontentloaded")
+        await page.goto(URLS["confirmation"], wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
         return f"Mock order placed. Confirmation number {order['orderNumber']}. Total ${order['total']:.2f}."
     return "Unknown tool"
+
+
+async def run_tool_call(fc, page):
+    try:
+        return await asyncio.wait_for(handle_tool_call(fc, page), timeout=TOOL_TIMEOUT_SECONDS)
+    except Exception as exc:
+        detail = str(exc) or exc.__class__.__name__
+        print(f"⚠️ Tool {fc.name} failed: {detail}")
+        return f"{fc.name} failed: {detail}"
 
 
 async def main():
@@ -396,11 +408,15 @@ async def main():
                             if response.tool_call:
                                 function_responses = []
                                 for fc in response.tool_call.function_calls:
-                                    result = await handle_tool_call(fc, page)
+                                    result = await run_tool_call(fc, page)
                                     function_responses.append(types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
                                     ))
-                                await session.send_tool_response(function_responses=function_responses)
+                                await asyncio.wait_for(
+                                    session.send_tool_response(function_responses=function_responses),
+                                    timeout=TOOL_TIMEOUT_SECONDS,
+                                )
+                                print("✅ Sent tool response")
 
                             if response.data is not None:
                                 mark_assistant_audio()
