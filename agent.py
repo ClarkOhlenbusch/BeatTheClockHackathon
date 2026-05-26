@@ -19,6 +19,10 @@ TOOL_TIMEOUT_SECONDS = 8
 STARTUP_MESSAGE = (
     "Greet the shopper in one short sentence and ask what furniture they are shopping for today."
 )
+TOOL_CONTINUATION_MESSAGE = (
+    "The browser action is complete. In one or two short spoken sentences, describe what changed "
+    "and ask the shopper what they would like to do next."
+)
 
 PAGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pages")
 URLS = {
@@ -417,6 +421,16 @@ async def main():
                                     timeout=TOOL_TIMEOUT_SECONDS,
                                 )
                                 print("✅ Sent tool response")
+                                await session.send_client_content(
+                                    turns=[
+                                        types.Content(
+                                            role="user",
+                                            parts=[types.Part.from_text(text=TOOL_CONTINUATION_MESSAGE)],
+                                        )
+                                    ]
+                                )
+                                print("✅ Requested post-tool response")
+                                break
 
                             if response.data is not None:
                                 mark_assistant_audio()
